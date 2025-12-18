@@ -1,12 +1,9 @@
 
 // Consolidate Firebase imports and properly export the Auth type to resolve compilation errors
-import { initializeApp, getApps } from 'firebase/app';
-import type { FirebaseApp } from 'firebase/app';
-// Fix: Separated getAuth and Auth type import from firebase/auth to resolve "no exported member" errors in strict environments
-import { getAuth } from 'firebase/auth';
-import type { Auth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import type { Firestore } from 'firebase/firestore';
+import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
+// Fix: Combined value and type imports from firebase/auth and firebase/firestore to resolve "no exported member" errors
+import { getAuth, type Auth } from 'firebase/auth';
+import { getFirestore, type Firestore } from 'firebase/firestore';
 
 /**
  * 🚀 直接在這裡貼上您的 Firebase 配置

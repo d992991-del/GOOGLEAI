@@ -1,5 +1,5 @@
 
-// Fixed Firebase Auth imports to ensure all modular members are correctly recognized by ensuring clean named imports
+// Fixed Firebase Auth imports to ensure all modular members are correctly recognized by the TypeScript compiler
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
