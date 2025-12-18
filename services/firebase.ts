@@ -1,9 +1,12 @@
 
 // Consolidate Firebase imports and properly export the Auth type to resolve compilation errors
-import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-// Fix: Consolidate getAuth and Auth type import from firebase/auth
-import { getAuth, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { initializeApp, getApps } from 'firebase/app';
+import type { FirebaseApp } from 'firebase/app';
+// Fix: Separated getAuth and Auth type import from firebase/auth to resolve "no exported member" errors in strict environments
+import { getAuth } from 'firebase/auth';
+import type { Auth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 
 /**
  * 🚀 直接在這裡貼上您的 Firebase 配置
@@ -47,8 +50,10 @@ let db: Firestore | null = null;
 if (isFirebaseEnabled && config) {
   try {
     app = getApps().length === 0 ? initializeApp(config) : getApps()[0];
-    auth = getAuth(app);
-    db = getFirestore(app);
+    if (app) {
+      auth = getAuth(app);
+      db = getFirestore(app);
+    }
   } catch (error) {
     console.error("Firebase 初始化失敗:", error);
   }
