@@ -1,0 +1,59 @@
+
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# 設定必要的權限以進行 GitHub Pages 部署
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 確保同時只有一個部署任務在執行
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  # 任務一：構建 (Build)
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          # 移除 cache: 'npm' 因為根目錄沒有 package-lock.json，會導致失敗
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build project
+        run: npm run build
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # 將 Vite 編譯出的 dist 資料夾作為 Artifact 上傳
+          path: ./dist
+
+  # 任務二：部署 (Deploy)
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
