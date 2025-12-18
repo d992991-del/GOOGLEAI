@@ -1,4 +1,4 @@
-
+// Updated geminiService.ts with improved Gemini 3 model selection and configuration for text tasks
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Transaction, Category, BankAccount } from "../types";
 
@@ -22,23 +22,22 @@ export const geminiService = {
       };
 
       const prompt = `
-        你是一位專業的理財顧問。請根據以下數據進行分析：
+        數據概覽：
         - 總收入：${summary.income} TWD
         - 總支出：${summary.expense} TWD
         - 最大支出項目：${summary.topCategory?.name || '無'} (${summary.topCategory?.amount || 0} TWD)
         - 現有帳戶餘額：${accounts.map(a => `${a.name}: ${a.balance}`).join(', ')}
 
-        請提供：
-        1. 針對目前收支平衡的簡短分析。
-        2. 給予 2-3 個具體的理財或省錢建議。
-        3. 一句充滿動力的財務座右銘。
-        請使用繁體中文。
+        請分析上述數據並提供專業的理財建議。
       `;
 
-      // Use GenerateContentResponse type as per guidelines
+      // Use gemini-3-flash-preview for basic text tasks like summarization and analysis
       const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
+        config: {
+          systemInstruction: "你是一位專業的理財顧問。請根據數據提供：1. 收支平衡分析；2. 具體理財建議；3. 財務座右銘。請使用繁體中文回答。",
+        },
       });
 
       // Extract generated text directly from the .text property

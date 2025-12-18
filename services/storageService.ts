@@ -1,10 +1,5 @@
-
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged 
-} from 'firebase/auth';
+// Fixed Firebase Auth imports to ensure all members are correctly exported and recognized by the compiler
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { 
   doc, 
   setDoc, 

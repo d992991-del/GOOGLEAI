@@ -1,39 +1,36 @@
-
+// Consolidate Firebase imports and properly export the Auth type to resolve compilation errors
 import { initializeApp, getApps } from 'firebase/app';
 import type { FirebaseApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import type { Auth } from 'firebase/auth';
+import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 
 /**
- * [重要] Firebase 配置區塊
- * 您可以將從 Firebase Console 取得的配置貼在此處，
- * 這樣就不需要透過 GitHub Secrets 也能直接運行與部屬。
+ * 🚀 直接在這裡貼上您的 Firebase 配置
+ * 這樣您就不需要去 GitHub 設定 Secrets，方便後續快速開發。
  */
 const PUBLIC_FIREBASE_CONFIG = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "您的_API_KEY",
+  authDomain: "您的_PROJECT_ID.firebaseapp.com",
+  projectId: "您的_PROJECT_ID",
+  storageBucket: "您的_PROJECT_ID.appspot.com",
+  messagingSenderId: "您的_SENDER_ID",
+  appId: "您的_APP_ID"
 };
 
 const getFirebaseConfig = () => {
-  // 1. 優先嘗試從環境變數讀取 (GitHub Actions / Vite Define)
+  // 優先檢查是否有透過 Vite 注入的環境變數 (例如 GitHub Actions 傳入)
   try {
     const configStr = process.env.FIREBASE_CONFIG;
-    if (configStr && configStr !== '{}') {
+    if (configStr && configStr !== '{}' && configStr !== 'undefined') {
       return JSON.parse(configStr);
     }
   } catch (e) {
-    console.warn("無法從環境變數讀取 Firebase 配置。");
+    // 忽略解析錯誤
   }
 
-  // 2. 如果環境變數不存在，且硬編碼區塊已填寫，則使用硬編碼內容
-  // 檢查是否仍然是預設值
-  if (PUBLIC_FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY") {
+  // 如果環境變數不存在，檢查硬編碼區塊是否已填寫 (不是預設提示字串)
+  if (PUBLIC_FIREBASE_CONFIG.apiKey && !PUBLIC_FIREBASE_CONFIG.apiKey.includes("您的")) {
     return PUBLIC_FIREBASE_CONFIG;
   }
 
