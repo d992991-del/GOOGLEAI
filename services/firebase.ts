@@ -1,12 +1,9 @@
 
 // Consolidate Firebase imports and properly export the Auth type to resolve compilation errors
-import { initializeApp, getApps } from 'firebase/app';
-import type { FirebaseApp } from 'firebase/app';
-// Separate value and type imports to ensure better compatibility with various TypeScript/Vite configurations
-import { getAuth } from 'firebase/auth';
-import type { Auth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import type { Firestore } from 'firebase/firestore';
+import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
+// Fix: Consolidate getAuth and Auth type import from firebase/auth
+import { getAuth, type Auth } from 'firebase/auth';
+import { getFirestore, type Firestore } from 'firebase/firestore';
 
 /**
  * 🚀 直接在這裡貼上您的 Firebase 配置
