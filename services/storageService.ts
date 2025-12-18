@@ -1,134 +1,153 @@
 
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  doc, 
+  setDoc, 
+  getDoc, 
+  collection, 
+  getDocs, 
+  query, 
+  where,
+  deleteDoc
+} from 'firebase/firestore';
+import { auth, db, isFirebaseEnabled } from './firebase';
 import { User, BankAccount, Transaction, Category, Budget } from '../types';
 import { DEFAULT_CATEGORIES } from '../constants';
 
-const STORAGE_KEYS = {
-  USERS: 'fin_users',
-  CURRENT_USER: 'fin_current_user',
-  ACCOUNTS: 'fin_accounts_',
-  TRANSACTIONS: 'fin_transactions_',
-  CATEGORIES: 'fin_categories_',
-  BUDGETS: 'fin_budgets_',
-};
+// Local Storage Fallback Keys
+const LS_KEYS = { CURRENT_USER: 'fin_current_user_demo' };
 
 export const storageService = {
-  // Auth simulation
-  register: (email: string, password: string, name: string): User => {
-    const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
-    if (users.find((u: any) => u.email === email)) {
-      throw new Error('此電子郵件已註冊');
+  // Auth
+  register: async (email: string, password: string, name: string): Promise<User> => {
+    if (isFirebaseEnabled && auth && db) {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user: User = { id: userCredential.user.uid, email, name };
+      await setDoc(doc(db, 'users', user.id), user);
+      return user;
+    } else {
+      // 離線模式模擬
+      const user = { id: 'demo-' + Date.now(), email, name };
+      localStorage.setItem(LS_KEYS.CURRENT_USER, JSON.stringify(user));
+      return user;
     }
-    const newUser: User = { id: Date.now().toString(), email, name };
-    users.push({ ...newUser, password });
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-    return newUser;
   },
 
-  login: (email: string, password: string): User => {
-    const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
-    const user = users.find((u: any) => u.email === email && u.password === password);
-    if (!user) {
-      throw new Error('電子郵件或密碼錯誤');
+  login: async (email: string, password: string): Promise<User> => {
+    if (isFirebaseEnabled && auth && db) {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+      if (!userDoc.exists()) throw new Error("使用者資料不存在。");
+      return userDoc.data() as User;
+    } else {
+      // 離線演示登入 (密碼固定為 test123456)
+      if (email === 'demo@example.com' && password === 'test123456') {
+        const user = { id: 'demo-user', email, name: '演示使用者' };
+        localStorage.setItem(LS_KEYS.CURRENT_USER, JSON.stringify(user));
+        return user;
+      }
+      throw new Error("離線模式僅支援 demo@example.com / test123456");
     }
-    const { password: _, ...userData } = user;
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(userData));
-    return userData;
   },
 
-  logout: () => {
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+  logout: async () => {
+    if (isFirebaseEnabled && auth) await signOut(auth);
+    localStorage.removeItem(LS_KEYS.CURRENT_USER);
   },
 
-  getCurrentUser: (): User | null => {
-    const userJson = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-    return userJson ? JSON.parse(userJson) : null;
+  getCurrentUser: (): Promise<User | null> => {
+    return new Promise((resolve) => {
+      if (isFirebaseEnabled && auth && db) {
+        const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+          unsubscribe();
+          if (fbUser) {
+            const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
+            resolve(userDoc.exists() ? (userDoc.data() as User) : null);
+          } else {
+            resolve(null);
+          }
+        });
+      } else {
+        const userJson = localStorage.getItem(LS_KEYS.CURRENT_USER);
+        resolve(userJson ? JSON.parse(userJson) : null);
+      }
+    });
   },
 
   // Bank Accounts
-  getAccounts: (userId: string): BankAccount[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.ACCOUNTS + userId);
-    if (!data) {
-      const defaultAccounts: BankAccount[] = [
-        { id: 'acc1', name: '台新 Richart', balance: 50000, type: '儲蓄帳戶', color: '#3B82F6' },
-        { id: 'acc2', name: '現金', balance: 3500, type: '現金', color: '#10B981' },
-      ];
-      localStorage.setItem(STORAGE_KEYS.ACCOUNTS + userId, JSON.stringify(defaultAccounts));
-      return defaultAccounts;
+  // Fix: Regular function used to bind 'this' correctly to storageService
+  async getAccounts(userId: string): Promise<BankAccount[]> {
+    if (isFirebaseEnabled && db) {
+      const q = query(collection(db, 'accounts'), where('userId', '==', userId));
+      const snapshot = await getDocs(q);
+      const accounts = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as BankAccount));
+      if (accounts.length === 0) return this.initDefaultData(userId);
+      return accounts;
     }
-    return JSON.parse(data);
+    return []; // 演示模式簡化處理
   },
 
-  saveAccount: (userId: string, account: BankAccount) => {
-    const accounts = storageService.getAccounts(userId);
-    const index = accounts.findIndex(a => a.id === account.id);
-    if (index > -1) {
-      accounts[index] = account;
-    } else {
-      accounts.push(account);
+  async initDefaultData(userId: string) {
+    if (!db) return [];
+    const defaults = [
+      { name: '中信儲蓄帳戶', balance: 125000, type: '儲蓄帳戶', color: '#3B82F6', userId },
+      { name: '台新 Richart', balance: 45000, type: '薪資帳戶', color: '#EF4444', userId },
+    ];
+    const created: BankAccount[] = [];
+    for (const acc of defaults) {
+      const ref = doc(collection(db, 'accounts'));
+      const newAcc = { ...acc, id: ref.id };
+      await setDoc(ref, newAcc);
+      created.push(newAcc);
     }
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS + userId, JSON.stringify(accounts));
+    return created;
   },
 
-  deleteAccount: (userId: string, accountId: string) => {
-    let accounts = storageService.getAccounts(userId);
-    accounts = accounts.filter(a => a.id !== accountId);
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS + userId, JSON.stringify(accounts));
-  },
-
-  // Transactions
-  getTransactions: (userId: string): Transaction[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS + userId);
-    if (!data) {
-      const now = new Date();
-      const defaultTransactions: Transaction[] = [
-        { id: 't1', accountId: 'acc1', categoryId: 'cat7', amount: 45000, type: 'INCOME', date: now.toISOString(), note: '本月薪資' },
-        { id: 't2', accountId: 'acc2', categoryId: 'cat1', amount: 150, type: 'EXPENSE', date: now.toISOString(), note: '午餐便當' },
-        { id: 't3', accountId: 'acc1', categoryId: 'cat5', amount: 12000, type: 'EXPENSE', date: now.toISOString(), note: '房租' },
-      ];
-      localStorage.setItem(STORAGE_KEYS.TRANSACTIONS + userId, JSON.stringify(defaultTransactions));
-      return defaultTransactions;
+  saveAccount: async (userId: string, account: BankAccount) => {
+    if (isFirebaseEnabled && db) {
+      await setDoc(doc(db, 'accounts', account.id), { ...account, userId }, { merge: true });
     }
-    return JSON.parse(data);
   },
 
-  saveTransaction: (userId: string, transaction: Transaction) => {
-    const transactions = storageService.getTransactions(userId);
-    const index = transactions.findIndex(t => t.id === transaction.id);
-    if (index > -1) {
-      transactions[index] = transaction;
-    } else {
-      transactions.push(transaction);
+  deleteAccount: async (userId: string, accountId: string) => {
+    if (isFirebaseEnabled && db) await deleteDoc(doc(db, 'accounts', accountId));
+  },
+
+  getTransactions: async (userId: string): Promise<Transaction[]> => {
+    if (isFirebaseEnabled && db) {
+      const q = query(collection(db, 'transactions'), where('userId', '==', userId));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
     }
-    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS + userId, JSON.stringify(transactions));
+    return [];
   },
 
-  deleteTransaction: (userId: string, transactionId: string) => {
-    let transactions = storageService.getTransactions(userId);
-    transactions = transactions.filter(t => t.id !== transactionId);
-    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS + userId, JSON.stringify(transactions));
-  },
-
-  // Categories
-  getCategories: (userId: string): Category[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.CATEGORIES + userId);
-    return data ? JSON.parse(data) : DEFAULT_CATEGORIES;
-  },
-
-  // Budgets
-  getBudgets: (userId: string): Budget[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.BUDGETS + userId);
-    if (!data) {
-        const defaultBudgets: Budget[] = [
-            { categoryId: 'cat1', amount: 8000 },
-            { categoryId: 'cat2', amount: 3000 },
-        ];
-        localStorage.setItem(STORAGE_KEYS.BUDGETS + userId, JSON.stringify(defaultBudgets));
-        return defaultBudgets;
+  saveTransaction: async (userId: string, transaction: Transaction) => {
+    if (isFirebaseEnabled && db) {
+      await setDoc(doc(db, 'transactions', transaction.id), { ...transaction, userId }, { merge: true });
     }
-    return JSON.parse(data);
   },
 
-  saveBudgets: (userId: string, budgets: Budget[]) => {
-    localStorage.setItem(STORAGE_KEYS.BUDGETS + userId, JSON.stringify(budgets));
+  deleteTransaction: async (userId: string, transactionId: string) => {
+    if (isFirebaseEnabled && db) await deleteDoc(doc(db, 'transactions', transactionId));
+  },
+
+  getCategories: async (userId: string): Promise<Category[]> => DEFAULT_CATEGORIES,
+
+  getBudgets: async (userId: string): Promise<Budget[]> => {
+    if (isFirebaseEnabled && db) {
+      const budgetDoc = await getDoc(doc(db, 'userBudgets', userId));
+      return budgetDoc.exists() ? (budgetDoc.data() as any).budgets : [];
+    }
+    return [];
+  },
+
+  saveBudgets: async (userId: string, budgets: Budget[]) => {
+    if (isFirebaseEnabled && db) await setDoc(doc(db, 'userBudgets', userId), { budgets, userId });
   }
 };

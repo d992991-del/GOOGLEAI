@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User, BankAccount, Transaction, Category, Budget } from './types';
 import { storageService } from './services/storageService';
 import Auth from './components/Auth';
@@ -19,33 +19,42 @@ const App: React.FC = () => {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const currentUser = storageService.getCurrentUser();
-    if (currentUser) {
-      setUser(currentUser);
-      loadUserData(currentUser.id);
+  const loadUserData = useCallback(async (userId: string) => {
+    try {
+      const [accs, trans, cats, buds] = await Promise.all([
+        storageService.getAccounts(userId),
+        storageService.getTransactions(userId),
+        storageService.getCategories(userId),
+        storageService.getBudgets(userId)
+      ]);
+      setAccounts(accs);
+      setTransactions(trans);
+      setCategories(cats);
+      setBudgets(buds);
+    } catch (e) {
+      console.error("載入數據失敗", e);
     }
-    setIsLoading(false);
   }, []);
 
-  const loadUserData = (userId: string) => {
-    const accs = storageService.getAccounts(userId);
-    const trans = storageService.getTransactions(userId);
-    const cats = storageService.getCategories(userId);
-    const buds = storageService.getBudgets(userId);
-    setAccounts(accs);
-    setTransactions(trans);
-    setCategories(cats);
-    setBudgets(buds);
-  };
+  useEffect(() => {
+    const init = async () => {
+      const currentUser = await storageService.getCurrentUser();
+      if (currentUser) {
+        setUser(currentUser);
+        await loadUserData(currentUser.id);
+      }
+      setIsLoading(false);
+    };
+    init();
+  }, [loadUserData]);
 
-  const handleLogin = (u: User) => {
+  const handleLogin = async (u: User) => {
     setUser(u);
-    loadUserData(u.id);
+    await loadUserData(u.id);
   };
 
-  const handleLogout = () => {
-    storageService.logout();
+  const handleLogout = async () => {
+    await storageService.logout();
     setUser(null);
     setView('dashboard');
   };
@@ -62,59 +71,18 @@ const App: React.FC = () => {
     );
   }
 
-  if (!user) {
-    return <Auth onLogin={handleLogin} />;
-  }
+  if (!user) return <Auth onLogin={handleLogin} />;
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Sidebar - Persistent Navigation */}
       <Sidebar activeView={view} setView={setView} onLogout={handleLogout} userName={user.name} />
-
-      {/* Main Content Area */}
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 transition-all duration-300">
         <div className="max-w-6xl mx-auto">
-          {view === 'dashboard' && (
-            <Dashboard 
-              user={user} 
-              accounts={accounts} 
-              transactions={transactions} 
-              categories={categories} 
-              budgets={budgets}
-            />
-          )}
-          {view === 'accounts' && (
-            <Accounts 
-              userId={user.id} 
-              accounts={accounts} 
-              onUpdate={refreshData} 
-            />
-          )}
-          {view === 'transactions' && (
-            <Transactions 
-              userId={user.id} 
-              transactions={transactions} 
-              accounts={accounts} 
-              categories={categories} 
-              onUpdate={refreshData} 
-            />
-          )}
-          {view === 'budgets' && (
-            <Budgets 
-              userId={user.id} 
-              transactions={transactions} 
-              categories={categories} 
-              budgets={budgets}
-              onUpdate={refreshData} 
-            />
-          )}
-          {view === 'reports' && (
-            <Reports 
-              transactions={transactions} 
-              categories={categories} 
-              accounts={accounts} 
-            />
-          )}
+          {view === 'dashboard' && <Dashboard user={user} accounts={accounts} transactions={transactions} categories={categories} budgets={budgets} />}
+          {view === 'accounts' && <Accounts userId={user.id} accounts={accounts} onUpdate={refreshData} />}
+          {view === 'transactions' && <Transactions userId={user.id} transactions={transactions} accounts={accounts} categories={categories} onUpdate={refreshData} />}
+          {view === 'budgets' && <Budgets userId={user.id} transactions={transactions} categories={categories} budgets={budgets} onUpdate={refreshData} />}
+          {view === 'reports' && <Reports transactions={transactions} categories={categories} accounts={accounts} />}
         </div>
       </main>
     </div>
